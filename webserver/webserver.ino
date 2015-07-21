@@ -51,7 +51,7 @@ const char page[] PROGMEM = "HTTP/1.1 200 OK\r\n"
           "<body onload='PI(0,0)'>"
   "<b>Temp1</b><i id='t1'>2*</i>&deg;C<br><b>Temp2</b><i id='t2'>2*</i>&deg;C<br><b>Temp3</b><i id='t3'>2*</i>&deg;C<br><b>Temp4</b><i id='t4'>2*</i>&deg;C<br><b>TempInt</b><i id='ti'>2*</i>&deg;C<br>"
   "<b>Fan1</b><i id='f1'>OFF</i><br><b>Fan2</b><i id='f2'>OFF</i><br><b>Compressor</b><i id='c'>OFF</i><br><b>TempTop</b>"
-  "<i><input type='number' min ='0' max = '9' name='top' id='to' onchange='PI(this.name,this.value)'></i><i id='t'></i><br><b>TempBottom</b><input type='number' min ='0' max = '9' name='btm' id='bo' onchange='PI(this.name,this.value)'></i><i id='b></i>"
+  "<i><input type='number' min='0' max='9' name='top' id='to' onchange='PI(this.name,this.value)'></i><i id='t'></i><br><b>TempBottom</b><input type='number' min='0' max='9' name='btm' id='bo' onchange='PI(this.name,this.value)'></i><i id='b'></i>"
   "</body>"
  ;
 const char style[] PROGMEM = "HTTP/1.1 200 OK\r\n"
@@ -180,10 +180,10 @@ void loop() {
     char* request = (char *)Ethernet::buffer + pos;
     
     #ifdef DEBUG_MODE
-    Serial.println(F("---------------------------------------- NEW PACKET ----------------------------------------"));
-    Serial.println(request);
-    Serial.println(F("--------------------------------------------------------------------------------------------"));
-    Serial.println();
+      Serial.println(F("---------------------------------------- NEW PACKET ----------------------------------------"));
+      Serial.println(request);
+      Serial.println(F("--------------------------------------------------------------------------------------------"));
+      Serial.println();
     #endif
     if(strncmp("GET /setter.php?", request, 16) == 0) {
       Serial.print(F("Data for temp: "));
