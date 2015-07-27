@@ -43,6 +43,7 @@ byte Ethernet::buffer[900]; // tcp/ip send and receive buffer
 byte temp_roll;
 float t1,t2,t3,t4,t,b,ti,deltaTop,deltaBtm,delta2Btm,deltaFault,oldTop,oldBtm,avgTop,avgBtm;
 char *f1, *f2, *c;
+
 const char page[] PROGMEM = "HTTP/1.1 200 OK\r\n"
           "Content-Type: text/html\r\n"
           "\r\n"
@@ -51,13 +52,15 @@ const char page[] PROGMEM = "HTTP/1.1 200 OK\r\n"
           "<body onload='PI(0,0)'>"
   "<b>Temp1</b><i id='t1'>2*</i>&deg;C<br><b>Temp2</b><i id='t2'>2*</i>&deg;C<br><b>Temp3</b><i id='t3'>2*</i>&deg;C<br><b>Temp4</b><i id='t4'>2*</i>&deg;C<br><b>TempInt</b><i id='ti'>2*</i>&deg;C<br>"
   "<b>Fan1</b><i id='f1'>OFF</i><br><b>Fan2</b><i id='f2'>OFF</i><br><b>Compressor</b><i id='c'>OFF</i><br><b>TempTop</b>"
-  "<i><input type='number' min='0' max='9' name='top' id='to' onchange='PI(this.name,this.value)'></i><i id='t'></i><br><b>TempBottom</b><input type='number' min='0' max='9' name='btm' id='bo' onchange='PI(this.name,this.value)'></i><i id='b'></i>"
+  "<i><input type='number' min ='0' max = '9' name='top' id='to' onchange='PI(this.name,this.value)'></i><i id='t'></i><br><b>TempBottom</b><input type='number' min ='0' max = '9' name='btm' id='bo' onchange='PI(this.name,this.value)'></i><i id='b'></i>"
   "</body>"
  ;
+
 const char style[] PROGMEM = "HTTP/1.1 200 OK\r\n"
           "Content-Type: text/html\r\n"
           "\r\n"
           "b,a,i{padding:5px;display:inline-block;width:100px;}.on{background:green;}.off{background:red;}i{text-align:center;}i input{width:50px;text-align:right;}";          
+
 const char js[] PROGMEM = "HTTP/1.1 200 OK\r\n"
           "Content-Type: text/html\r\n"
           "\r\n"         
@@ -66,6 +69,7 @@ const char js[] PROGMEM = "HTTP/1.1 200 OK\r\n"
   " var x=this.responseXML.getElementsByTagName(f[i])[0].childNodes[0].nodeValue; e.innerHTML=x;"
   " if(isNaN(e.innerHTML))if(e.innerHTML=='ON')e.className='on';else e.className='off';};};}; if (a==0)request.open('GET','data.xml?r='+Date.now(),true);else"
   " request.open('GET','setter.php?'+a+'='+b,true); request.send(null); if (a==0)setTimeout('PI(0,0)',15000);}";
+
 const char xml[] PROGMEM = "HTTP/1.1 200 OK\r\n"
           "Content-Type: text/xml\r\n"
           "\r\n"
@@ -83,9 +87,17 @@ const char xml[] PROGMEM = "HTTP/1.1 200 OK\r\n"
             "<b>$T</b>"
          " </inputs>"
           ;
+const char munin[] PROGMEM = "HTTP/1.1 200 OK\r\n"
+          "Content-Type: text/xml\r\n"
+          "\r\n"
+          "$T $T $T $T $T $S $S $S $T $T"         
+          ;
+          //T1 T2 T3 T4 Ti Fan1 Fan2 CompRelay TopTemp BottomTemp
+
 const char ok[] PROGMEM = "HTTP/1.1 200 OK\r\n"
           "Content-Type: text/html\r\n"
           "\r\n";
+
 /*
   %D = unsigned integer
   %T = Floating point
@@ -107,10 +119,10 @@ void setup() {
   digitalWrite(COMP, OFF);
   digitalWrite(RES0, ON);
   //deltas
-  deltaTop = 5.00;
-  deltaBtm = 1.00;  // delta on set temperature
-  delta2Btm = 0.50; // delta between t3 and t4
-  deltaFault = 25.00; // delta between 2 readings that triggers fault
+  deltaTop    = 3.00;   // diferenta de temperatura/2 care declanseaza racirea (compresor + ventilator de racire)
+  deltaBtm    = 1.00;   // diferenta de temperatura/2 care declanseaza racirea (ventilator de racire, in incinta principala)
+  delta2Btm   = 0.50;   // diferenta de temperatura/2 care declanseaza ventilatorul de recirculare
+  deltaFault  = 25.00;  // delta between 2 readings that triggers fault
   
   Serial.begin(9600);
    if (!ether.begin(sizeof Ethernet::buffer, mymac, ETH_CS_PIN)) {
@@ -143,8 +155,9 @@ void setup() {
     Serial.print(F("Number of Devices found on Int bus = "));  
     Serial.println(Int_Bus.getDeviceCount());
 
-    t=4.00; //toptemp = 4
-    b=7.00; //bottomtemp = 7 temps we want to achieve
+    t=4.00; //Temperatura din zona de racire activa +-DeltaTop/2
+    b=7.00; //Temperatura din incinta principala +- deltaBtm/2
+    
     if (EEPROM.read(0x00)==0xFF&&EEPROM.read(0x01)==0xFF) { //eeprom not initialised, writing default values
       EEPROM.writeFloat(0x00,t);
       EEPROM.writeFloat(0x10,b);
@@ -180,10 +193,10 @@ void loop() {
     char* request = (char *)Ethernet::buffer + pos;
     
     #ifdef DEBUG_MODE
-      Serial.println(F("---------------------------------------- NEW PACKET ----------------------------------------"));
-      Serial.println(request);
-      Serial.println(F("--------------------------------------------------------------------------------------------"));
-      Serial.println();
+    Serial.println(F("---------------------------------------- NEW PACKET ----------------------------------------"));
+    Serial.println(request);
+    Serial.println(F("--------------------------------------------------------------------------------------------"));
+    Serial.println();
     #endif
     if(strncmp("GET /setter.php?", request, 16) == 0) {
       Serial.print(F("Data for temp: "));
@@ -211,6 +224,13 @@ void loop() {
       Serial.println (sizeof xml);
       BufferFiller bfill = ether.tcpOffset();
       bfill.emit_p(xml,t1,t2,t3,t4,ti,f1,f2,c,t,b);
+       ether.httpServerReply(bfill.position());      
+    }
+    else if(strncmp("GET /munin", request, 6) == 0) {
+      Serial.print(F("Requested munin page -- size "));
+      Serial.println (sizeof xml);
+      BufferFiller bfill = ether.tcpOffset();
+      bfill.emit_p(munin,t1,t2,t3,t4,ti,f1,f2,c,t,b);
        ether.httpServerReply(bfill.position());      
     }
     // if the request is for the "default" page
@@ -316,24 +336,25 @@ void setRelays() {
   
   
 }
+
 void checkFault() {
-  if (t1<-45.00 || t1 > 75.00) { // if the sensor is missing or fails
+  if (t1<-25.00 || t1 > 45.00) { // if the sensor is missing or fails
     Serial.print(F("t1 faulty"));
     Fault();
   }
-  if (t2<-45.00 || t2 > 75.00) {
+  if (t2<-25.00 || t2 > 45.00) {
     Serial.print(F("t2 faulty"));
     Fault();
   }
-  if (t3<-45.00 || t3 > 75.00) {
+  if (t3<-25.00 || t3 > 45.00) {
     Serial.print(F("t3 faulty"));
     Fault();
   }
-  if (t4<-45.00 || t4 > 75.00) {
+  if (t4<-25.00 || t4 > 45.00) {
     Serial.print(F("t4 faulty"));
     Fault();
   }
-  if (ti<-45.00 || ti > 75.00) {
+  if (ti<-25.00 || ti > 75.00) {
     Serial.print(F("ti faulty"));
     Fault();
   }
